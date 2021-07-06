@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "box_name": "macos-catalina-base",
+  "os_version": "10.15.7",
+  "description": "Bare MacOS Catalina box w/ brew, python3, and xcode CLI tools. MacOS updates current as of 2021-07-01. Manually enabled auto-login for vagrant user."
+}

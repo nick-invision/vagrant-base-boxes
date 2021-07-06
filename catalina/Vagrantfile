@@ -1,0 +1,56 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+VAGRANT_API_VERSION = "2"
+
+OS_UPDATE_SCRIPT = <<-SCRIPT
+softwareupdate -l
+softwareupdate -ir
+SCRIPT
+
+Vagrant.configure(VAGRANT_API_VERSION) do |config|
+  config.vagrant.plugins = ["vagrant-reload"]
+
+  config.vm.box = "ramsey/macos-catalina"
+  config.vm.box_version = "1.0.0"
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+  config.vm.boot_timeout = 3600 # 60m, system updates take forever
+
+  config.ssh.username = "vagrant"
+  config.ssh.password = "vagrant"
+  config.ssh.forward_agent = true
+  config.ssh.insert_key = false
+
+  config.vm.provider "virtualbox" do |v|
+    # required for the manual approval of install_xcode_cli_tools
+    v.gui = true
+    v.memory = 8192
+    v.cpus = 4
+    v.customize ["modifyvm", :id, "--audio", "none"]
+  end
+
+  # todo: find a better way to determine how many updates and restarts are necessary
+  # most base images require two rounds of updates, a patch version and followup security update
+  config.vm.provision "patch_update_OS", 
+    type: "shell", 
+    inline: OS_UPDATE_SCRIPT
+  # this plugin allows the provision to reboot after OS update and pickup where it left off
+  config.vm.provision :reload
+  config.vm.provision "security_update_OS", 
+    type: "shell", 
+    inline: OS_UPDATE_SCRIPT
+  config.vm.provision :reload
+
+  # this must be run manually after first login to GUI so that xcode_cli prompt can be approved
+  config.vm.provision "setup", 
+    type: "shell", 
+    privileged: false,
+    # run: 'never', 
+    path: "setup.sh"
+
+  # this runs on every vagrant up/reload to check for OS update
+  # config.vm.provision "check_for_update",
+  #   type: "shell",
+  #   run: "always",
+  #   inline: "softwareupdate -l"
+end
