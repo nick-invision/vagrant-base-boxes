@@ -1,3 +1,5 @@
 .vagrant
 node_modules
-package.box
+*.box
+*.log
+*.ds_store

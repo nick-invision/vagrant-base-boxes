@@ -6,6 +6,7 @@ set -e
 
 # paths
 work_dir="$1"
+checksum="$2"
 metadata_file_path="${work_dir}/metadata.json"
 box_path="$(pwd)/${work_dir}/package.box"
 
@@ -37,23 +38,23 @@ if [ ! -f "${box_path}" ]; then
 fi
 
 # box details
-box=$(jq -r .box_name ${metadata_file_path})
-vm_name="${box}"
-version=$(jq -r .version ${metadata_file_path})
-description=$(jq -r .description ${metadata_file_path})
+box_name=$(jq -r .box.name ${metadata_file_path})
+box_description=$(jq -r .box.description ${metadata_file_path})
+version=$(jq -r .release.version ${metadata_file_path})
+description=$(jq -r .release.description ${metadata_file_path})
 
 org="nick-invision"
-org_box="${org}/${box}"
+org_box="${org}/${box_name}"
 provider="virtualbox"
 
-echo "CMD: ${create_version_cmd}"
-
 echo
-echo "VM:           ${vm_name}"
-echo "Box:          ${org_box}"
-echo "Provider:     ${provider}"
-echo "Version:      ${version}"
-echo "Description:  ${description}"
+echo "Box"
+echo "  Name:             ${org_box}"
+echo "  Description:      ${box_description}"
+echo "  Provider:         ${provider}"
+echo "Release"
+echo "  Version:          ${version}"
+echo "  Description:      ${description}"
 
 echo
 read -p "Are these values correct? (y/N) " proceed
@@ -69,10 +70,21 @@ echo
 
 cd $work_dir
 
-sha256=$(sha256sum -b -z "${box_path}")
-checksum=$(cut -d' ' -f1 <<< "${sha256}")
+if [ -z $checksum ]; then
+  sha256=$(sha256sum -b -z "${box_path}")
+  checksum=$(cut -d' ' -f1 <<< "${sha256}")
+fi
 
 echo "Checksum: ${checksum}"
+
+if ! vagrant cloud box show $org_box &> /dev/null
+then
+    echo "Box $org_box not found on Vagrant Cloud, creating..."
+    vagrant cloud box create \
+      --no-private \
+      --short-description "${box_description}" \
+      "${org_box}"
+fi
 
 vagrant cloud version create \
     -d "${description}" \
