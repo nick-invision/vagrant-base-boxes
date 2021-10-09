@@ -1,0 +1,11 @@
+{
+  "box": {
+    "name": "macos-bigsur-base",
+    "description": "MacOS Big Sur box w/ brew, python3, and xcode CLI tools. Manually enabled auto-login for vagrant user, and disabled screensaver and lock"
+  },
+  "release": {
+    "version": "0.0.2",
+    "os_version": "11.6",
+    "description": "MacOS updates current as of 2021-10-05; fixed NVRAM boot problem"
+  }
+}

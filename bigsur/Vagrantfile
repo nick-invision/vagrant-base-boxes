@@ -1,0 +1,34 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+VAGRANT_API_VERSION = "2"
+
+Vagrant.configure(VAGRANT_API_VERSION) do |config|
+  config.vagrant.plugins = ["vagrant-reload", "vagrant-disksize"]
+
+  config.vm.box = "nick-invision/macos-catalina-base"
+  config.vm.box_version = "0.0.1"
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+  config.vm.boot_timeout = 3600 # 60m
+
+  config.ssh.username = "vagrant"
+  # config.ssh.password = "vagrant"
+  # config.ssh.forward_agent = true
+  config.ssh.insert_key = false
+  config.disksize.size = '80GB'
+
+
+  config.vm.provider "virtualbox" do |v|
+    v.gui = true
+    v.memory = 8192
+    v.cpus = 4
+    v.customize ["modifyvm", :id, "--audio", "none"]
+    v.customize ["storageattach", :id, 
+      "--storagectl", "SATA Controller", 
+      "--port", "1", "--device", "0", 
+      "--type", "dvddrive", 
+      "--medium", "emptydrive"]
+    # if VM clock is out of sync, runner install will fail
+    v.customize [ "guestproperty", "set", :id, "--timesync-threshold", 10000 ]
+  end
+end

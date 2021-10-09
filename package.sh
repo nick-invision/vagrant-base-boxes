@@ -77,29 +77,46 @@ fi
 
 echo "Checksum: ${checksum}"
 
+# curl \
+#   --header "Authorization: Bearer $VAGRANT_CLOUD_TOKEN" \
+#   --request DELETE \
+#   "https://app.vagrantup.com/api/v1/box/${org}/${box_name}"
+
 if ! vagrant cloud box show $org_box &> /dev/null
 then
-    echo "Box $org_box not found on Vagrant Cloud, creating..."
-    vagrant cloud box create \
-      --no-private \
-      --short-description "${box_description}" \
-      "${org_box}"
+    printf "\n\nCreating box $org_box...\n"
+    curl \
+      --header "Content-Type: application/json" \
+      --header "Authorization: Bearer $VAGRANT_CLOUD_TOKEN" \
+      https://app.vagrantup.com/api/v1/boxes \
+      --data "{ \"box\": { \"username\": \"${org}\", \"name\": \"${box_name}\", \"short_description\": \"${box_description}\", \"is_private\": false } }"
 fi
 
-vagrant cloud version create \
-    -d "${description}" \
-    "${org_box}" \
-    "${version}"
+printf "\n\nCreating new version...\n"
+curl \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer $VAGRANT_CLOUD_TOKEN" \
+  "https://app.vagrantup.com/api/v1/box/${org}/${box_name}/versions" \
+  --data "{ \"version\": { \"version\": \"$version\", \"description\": \"$description\" } }"
 
-vagrant cloud provider create \
-    --checksum "${checksum}" \
-    --checksum-type "sha256" \
-    "${org_box}" \
-    "${provider}" \
-    "${version}"
+printf "\n\nCreating provider...\n"
+curl \
+  --header "Content-Type: application/json" \
+  --header "Authorization: Bearer $VAGRANT_CLOUD_TOKEN" \
+  "https://app.vagrantup.com/api/v1/box/${org}/${box_name}/version/${version}/providers" \
+  --data "{ \"provider\": { \"name\": \"${provider}\", \"checksum_type\":\"sha256\", \"checksum\":\"$checksum\" } }"
 
-vagrant cloud provider upload \
-    "${org_box}" \
-    "${provider}" \
-    "${version}" \
-    "${box_path}"
+printf "\n\nExtracting the upload URL from the response...\n"
+response=$(curl \
+    --header "Authorization: Bearer $VAGRANT_CLOUD_TOKEN" \
+ https://app.vagrantup.com/api/v1/box/${org}/${box_name}/version/${version}/provider/${provider}/upload)
+upload_path=$(echo "$response" | jq .upload_path)
+
+printf "\n\nUploading to %1...\n" "$upload_path"
+curl "$upload_path" --request PUT --upload-file "$box_path"
+
+printf "\n\nReleasing the version...\n"
+curl \
+  --header "Authorization: Bearer $VAGRANT_CLOUD_TOKEN" \
+  "https://app.vagrantup.com/api/v1/box/${org}/${box_name}/version/${version}/release" \
+  --request PUT
