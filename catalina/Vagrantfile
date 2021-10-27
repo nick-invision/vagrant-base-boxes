@@ -46,7 +46,7 @@ Vagrant.configure(VAGRANT_API_VERSION) do |config|
     type: "shell", 
     privileged: false,
     # run: 'never', 
-    path: "setup.sh"
+    path: "../scripts/configure-base-box.sh"
 
   # this runs on every vagrant up/reload to check for OS update
   # config.vm.provision "check_for_update",

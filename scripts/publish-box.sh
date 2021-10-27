@@ -6,9 +6,9 @@ set -e
 
 # paths
 work_dir="$1"
-checksum="$2"
 metadata_file_path="${work_dir}/metadata.json"
 box_path="$(pwd)/${work_dir}/package.box"
+s3_bucket="vagrant-public-boxes"
 
 # validations
 if [ -z $work_dir ]; then
@@ -40,12 +40,12 @@ fi
 # box details
 box_name=$(jq -r .box.name ${metadata_file_path})
 box_description=$(jq -r .box.description ${metadata_file_path})
+provider=$(jq -r .box.provider ${metadata_file_path})
 version=$(jq -r .release.version ${metadata_file_path})
 description=$(jq -r .release.description ${metadata_file_path})
 
 org="nick-invision"
 org_box="${org}/${box_name}"
-provider="virtualbox"
 
 echo
 echo "Box"
@@ -55,6 +55,10 @@ echo "  Provider:         ${provider}"
 echo "Release"
 echo "  Version:          ${version}"
 echo "  Description:      ${description}"
+if [[ -n "${checksum}" ]]; then
+  echo "  Checksum:         ${checksum}"
+fi
+
 
 echo
 read -p "Are these values correct? (y/N) " proceed
@@ -112,8 +116,14 @@ response=$(curl \
  https://app.vagrantup.com/api/v1/box/${org}/${box_name}/version/${version}/provider/${provider}/upload)
 upload_path=$(echo "$response" | jq .upload_path)
 
-printf "\n\nUploading to %1...\n" "$upload_path"
-curl "$upload_path" --request PUT --upload-file "$box_path"
+printf "\n\nUploading to %s...\n" "${upload_path}"
+cmd="curl \"${upload_path}\" --request PUT --upload-file \"$box_path\""
+printf "\n\ncommand:\n\n%s\n\n" "${cmd}"
+"${cmd}"
+
+# s3_path="${s3_bucket}/${box_name}/${version}/${provider}"
+# printf "\n\nUploading to %s...\n" "${s3_path}"
+# aws s3 cp ./package.box "s3://${s3_path}/" --region us-east-1 --endpoint-url "https://s3-accelerate.amazonaws.com"
 
 printf "\n\nReleasing the version...\n"
 curl \

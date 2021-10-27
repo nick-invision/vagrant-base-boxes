@@ -1,7 +1,8 @@
 {
   "box": {
     "name": "macos-catalina-base",
-    "description": "MacOS Catalina box w/ brew, python3, and xcode CLI tools"
+    "description": "MacOS Catalina box w/ brew, python3, and xcode CLI tools",
+    "provider": "virtualbox"
   },
   "release": {
     "version": "0.0.1",

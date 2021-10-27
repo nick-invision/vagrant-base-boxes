@@ -1,0 +1,12 @@
+{
+  "box": {
+    "name": "macos-monterey-base",
+    "description": "MacOS Monterey box w/ brew, python3, and xcode CLI tools. Manually enabled auto-login for vagrant user, and disabled screensaver and lock",
+    "provider": "parallels"
+  },
+  "release": {
+    "version": "0.0.1",
+    "os_version": "12.0",
+    "description": "MacOS updates current as of 2021-10-26"
+  }
+}

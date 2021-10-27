@@ -1,7 +1,8 @@
 {
   "box": {
     "name": "macos-bigsur-base",
-    "description": "MacOS Big Sur box w/ brew, python3, and xcode CLI tools. Manually enabled auto-login for vagrant user, and disabled screensaver and lock"
+    "description": "MacOS Big Sur box w/ brew, python3, and xcode CLI tools. Manually enabled auto-login for vagrant user, and disabled screensaver and lock",
+    "provider": "virtualbox"
   },
   "release": {
     "version": "0.0.2",
