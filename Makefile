@@ -7,7 +7,7 @@ monterey-publish:
 
 monterey-provision:
 	cd monterey && \
-		vagant provision --provision-with setup
+		vagrant provision --provision-with setup
 
 monterey-ssh:
 	cd monterey && \
