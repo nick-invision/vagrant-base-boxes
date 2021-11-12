@@ -12,7 +12,7 @@ s3_bucket="vagrant-public-boxes"
 
 # validations
 if [ -z $work_dir ]; then
-  echo "Usage: ./package.sh <vagrantfile-directory>"
+  echo "Usage: ./publish-box.sh <vagrantfile-directory>"
   exit 1
 fi
 
@@ -51,10 +51,18 @@ echo
 echo "Box"
 echo "  Name:             ${org_box}"
 echo "  Description:      ${box_description}"
-echo "  Provider:         ${provider}"
 echo "Release"
 echo "  Version:          ${version}"
 echo "  Description:      ${description}"
+echo "Provider"
+echo "  Name:             ${provider}"
+if [ -n "${USE_S3}" ]; then
+  echo "  Source:           S3"
+  echo "  Uploaded:         ${ALREADY_UPLOADED:-"false"}"
+else
+  echo "  Source:           Vagrant Cloud"
+fi
+
 if [[ -n "${checksum}" ]]; then
   echo "  Checksum:         ${checksum}"
 fi
@@ -103,27 +111,42 @@ curl \
   "https://app.vagrantup.com/api/v1/box/${org}/${box_name}/versions" \
   --data "{ \"version\": { \"version\": \"$version\", \"description\": \"$description\" } }"
 
-printf "\n\nCreating provider...\n"
-curl \
-  --header "Content-Type: application/json" \
-  --header "Authorization: Bearer $VAGRANT_CLOUD_TOKEN" \
-  "https://app.vagrantup.com/api/v1/box/${org}/${box_name}/version/${version}/providers" \
-  --data "{ \"provider\": { \"name\": \"${provider}\", \"checksum_type\":\"sha256\", \"checksum\":\"$checksum\" } }"
+if [ -n "${USE_S3}" ]; then
+  s3_prefix="${box_name}/${version}/${provider}"
+  s3_path="${s3_bucket}/${s3_prefix}"
+  s3_url="https://${s3_bucket}.s3.amazonaws.com/${s3_prefix}/package.box"
+  
+  if [ -z "${ALREADY_UPLOADED}" ]; then
+    printf "\n\nUploading to %s...\n" "${s3_path}"
+    aws s3 cp ./package.box "s3://${s3_path}/" --region us-east-1 --endpoint-url "https://s3-accelerate.amazonaws.com"  
+  fi
 
-printf "\n\nExtracting the upload URL from the response...\n"
-response=$(curl \
+  printf "\n\nCreating provider...\n"
+  curl \
+    --header "Content-Type: application/json" \
     --header "Authorization: Bearer $VAGRANT_CLOUD_TOKEN" \
- https://app.vagrantup.com/api/v1/box/${org}/${box_name}/version/${version}/provider/${provider}/upload)
-upload_path=$(echo "$response" | jq .upload_path)
+    "https://app.vagrantup.com/api/v1/box/${org}/${box_name}/version/${version}/providers" \
+    --data "{ \"provider\": { \"name\": \"${provider}\", \"checksum_type\":\"sha256\", \"checksum\":\"$checksum\", \"url\":\"${s3_url}\" } }"  
+else
+  printf "\n\nCreating provider...\n"
+  curl \
+    --header "Content-Type: application/json" \
+    --header "Authorization: Bearer $VAGRANT_CLOUD_TOKEN" \
+    "https://app.vagrantup.com/api/v1/box/${org}/${box_name}/version/${version}/providers" \
+    --data "{ \"provider\": { \"name\": \"${provider}\", \"checksum_type\":\"sha256\", \"checksum\":\"$checksum\" } }"
 
-printf "\n\nUploading to %s...\n" "${upload_path}"
-cmd="curl \"${upload_path}\" --request PUT --upload-file \"$box_path\""
-printf "\n\ncommand:\n\n%s\n\n" "${cmd}"
-"${cmd}"
+  printf "\n\nExtracting the upload URL from the response...\n"
+  response=$(curl \
+      --header "Authorization: Bearer $VAGRANT_CLOUD_TOKEN" \
+  https://app.vagrantup.com/api/v1/box/${org}/${box_name}/version/${version}/provider/${provider}/upload)
+  upload_path=$(echo "$response" | jq .upload_path)
 
-# s3_path="${s3_bucket}/${box_name}/${version}/${provider}"
-# printf "\n\nUploading to %s...\n" "${s3_path}"
-# aws s3 cp ./package.box "s3://${s3_path}/" --region us-east-1 --endpoint-url "https://s3-accelerate.amazonaws.com"
+  printf "\n\nUploading to %s...\n" "${upload_path}"
+  cmd="curl \"${upload_path}\" --request PUT --upload-file \"$box_path\""
+  printf "\n\ncommand:\n\n%s\n\n" "${cmd}"
+  "${cmd}"
+
+fi
 
 printf "\n\nReleasing the version...\n"
 curl \

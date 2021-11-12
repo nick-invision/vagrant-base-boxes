@@ -3,3 +3,4 @@ node_modules
 *.box
 *.log
 *.ds_store
+roles/

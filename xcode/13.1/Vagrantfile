@@ -1,0 +1,48 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+VAGRANT_API_VERSION = "2"
+
+MACOS_VERSION = "monterey"
+
+XCODE_VERSION = File.basename(Dir.getwd)
+XCODE_XIP_LOCATION = "~/Xcode_#{XCODE_VERSION}.xip"
+XCODE_XIP_EXCTRACTION_TIMEOUT = 1800
+VAGRANT_ROOT = File.expand_path(".", Dir.pwd)
+VM_NAME = "macos-#{MACOS_VERSION}-xcode#{XCODE_VERSION}"
+
+Vagrant.configure(VAGRANT_API_VERSION) do |config|
+  config.vagrant.plugins = ["vagrant-reload", "vagrant-disksize"]
+
+  config.vm.box = "nick-invision/macos-monterey-base"
+  config.vm.box_version = "0.0.1"
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+  config.vm.boot_timeout = 3600 # 60m
+
+  config.ssh.username = "vagrant"
+  # config.ssh.password = "vagrant"
+  # config.ssh.forward_agent = true
+  config.ssh.insert_key = false
+  config.disksize.size = '80GB'
+
+  config.vm.provider "parallels" do |v|
+    v.name = VM_NAME
+    v.memory = 8192
+    v.cpus = 2
+  end
+
+  config.vm.provision "ansible" do |ansible|
+    ansible.playbook = "#{VAGRANT_ROOT}/playbook.yml"
+    ansible.galaxy_role_file = "#{VAGRANT_ROOT}/requirements.yml"
+    
+    if ENV["VERBOSE"]
+      ansible.verbose = "vv"
+    end
+    
+    ansible.extra_vars = {
+      xcode_version: XCODE_VERSION,
+      xcode_xip_location: XCODE_XIP_LOCATION,
+      xcode_xip_extraction_timeout: XCODE_XIP_EXCTRACTION_TIMEOUT
+    }
+  end
+end

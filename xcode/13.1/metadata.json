@@ -1,0 +1,12 @@
+{
+  "box": {
+    "name": "macos-monterey-xcode13.1",
+    "description": "MacOS Monterey box w/ brew, python3, xcode CLI tools, Xcode 13.1, and an assortment of homebrew recipes",
+    "provider": "parallels"
+  },
+  "release": {
+    "version": "0.0.1",
+    "os_version": "12.0",
+    "description": "MacOS updates current as of 2021-11-10"
+  }
+}

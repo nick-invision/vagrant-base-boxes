@@ -1,0 +1,216 @@
+---
+################################################################################
+# RUNNERS
+################################################################################
+- name: Setup instance
+  hosts: all
+  gather_facts: true
+
+  vars:
+    # tilde in local paths cause headaches, fix them if exists
+    abs_xcode_xip_location_src: "{{ xcode_xip_location.replace('~', lookup('env', 'HOME')) }}"
+    # remote paths
+    xcode_xip_location_dest: "~/Xcode_{{ xcode_version }}.xip"
+    # required vars and paths
+    required_vars:
+      - xcode_version
+      - xcode_xip_location
+    required_files:
+      - "{{ abs_xcode_xip_location_src }}"
+    # when updating profiles, get them all
+    profiles:
+      - ~/.profile
+      - ~/.zprofile
+      - ~/.zshrc
+    # misc defaults
+    xcode_xip_extraction_timeout: 2700 # always give xcode 45m to unpack and install
+
+  pre_tasks:
+    - name: Validate prerequisites
+      run_once: yes
+      delegate_to: localhost
+      block:
+        - name: Check required variables are set
+          assert:
+            that:
+              - "{{ item }} is defined"
+              - "{{ item }} | length > 0"
+            quiet: true
+            fail_msg: "Required variable {{ item }} undefined or zero length"
+          loop: "{{ required_vars }}"
+
+        - name: Check required local files exist
+          assert:
+            that:
+              - "item is exists"
+            quiet: true
+            fail_msg: "Required path {{ item }} not found locally"
+          loop: "{{ required_files }}"
+
+    - block:
+        - name: Attempt to collect Xcode installed version
+          block:
+            - name: Find default Xcode installed version
+              command: xcodebuild -version
+              register: xcode_version_output
+              changed_when: false
+          rescue:
+            # macstadium.xcode role doesn't properly set this, so try to fix it then try to get version
+            - name: Attempt to set correct xcode path
+              command: xcode-select --switch /Applications/Xcode.app/Contents/Developer
+              become: true
+              ignore_errors: true
+              when: "'is a command line tools instance' in ansible_failed_result.stderr"
+            - name: Find default Xcode installed version
+              command: xcodebuild -version
+              ignore_errors: true
+              register: xcode_version_output
+
+        - name: Set Xcode Facts
+          set_fact:
+            xcode_installed_version: "{{ installed_version | ternary( installed_version, 'n/a' ) }}"
+            xcode_should_install: "{{ installed_version != xcode_version }}"
+            # required by macstadium.xcode
+            xcode_major_version: "{{ xcode_version.split('.')[0] }}"
+          vars:
+            installed_version: "{{ xcode_version_output.stdout | regex_search('(\\d+.\\d+)') }}"
+
+        - name: Xcode Debugging Facts
+          debug:
+            msg:
+              - "xcode_installed_version: {{ xcode_installed_version }}"
+              - "xcode_should_install: {{ xcode_should_install }}"
+              - "xcode_version: {{ xcode_version }}"
+              - "xcode_major_version: {{ xcode_major_version }}"
+              - "xcode_version_output {{ xcode_version_output }}"
+
+  tasks:
+    ################################################################################
+    # Setup profiles
+    ################################################################################
+    - name: Alias python3 as python to profiles
+      lineinfile:
+        dest: "{{ item }}"
+        line: "alias python=/usr/local/bin/python3"
+        create: yes
+      loop: "{{ profiles }}"
+
+    - name: Add pip3 as python to profiles
+      lineinfile:
+        dest: "{{ item }}"
+        line: "alias pip=/usr/local/bin/pip3"
+        create: yes
+      loop: "{{ profiles }}"
+
+    ################################################################################
+    # Xcode
+    ################################################################################
+    - name: Configure Xcode
+      block:
+        - name: Copy Xcode to remote
+          ansible.builtin.copy:
+            src: "{{ abs_xcode_xip_location_src }}"
+            dest: "{{ xcode_xip_location_dest }}"
+          when: xcode_should_install
+
+        - name: Install Xcode
+          include_role:
+            name: macstadium.xcode
+          vars:
+            xcode_xip_location: "{{ xcode_xip_location_dest }}"
+          when: xcode_should_install
+
+        # the macstadium.xcode role doesn't set this, which throws an error on re-run
+        - name: Set Xcode location
+          command: xcode-select --switch /Applications/Xcode.app/Contents/Developer
+          become: true
+          ignore_errors: true
+
+    ################################################################################
+    # OS
+    ################################################################################
+    - name: Disable Screensaver
+      community.general.osx_defaults:
+        domain: com.apple.screensaver
+        key: loginWindowIdleTime
+        type: int
+        value: 0
+      become: yes
+
+    ################################################################################
+    # Node
+    ################################################################################
+    - name: Setup Node
+      # become: yes
+      # become_flags: "-i"
+      # become_user: "{{ runner_user }}"
+      block:
+        - name: Install nvm
+          ansible.builtin.shell: >
+            curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.38.0/install.sh | bash
+          args:
+            executable: /bin/bash
+            chdir: "$HOME"
+            creates: "$HOME/.nvm/nvm.sh"
+
+        - name: Source nvm in user profiles
+          ansible.builtin.lineinfile:
+            path: "{{ item }}"
+            line: source ~/.nvm/nvm.sh
+            create: yes
+          loop: "{{ profiles }}"
+
+        - name: Install node
+          ansible.builtin.shell: |
+            . ~/.nvm/nvm.sh && nvm install {{item}}
+          args:
+            executable: /bin/zsh
+            chdir: "$HOME"
+            creates: "$HOME/.nvm/versions/node/v{{item}}"
+          loop:
+            - 10
+            - 12
+            - 14
+            - 16
+
+    ################################################################################
+    # Dependencies
+    ################################################################################
+    - name: Install Dependencies
+      # become: yes
+      # become_flags: "-i"
+      # become_user: "{{ runner_user }}"
+      block:
+        - name: Update Homebrew and dependencies
+          homebrew:
+            update_homebrew: yes
+            upgrade_all: yes
+
+        - name: Install cask dependencies
+          homebrew_cask:
+            name:
+              - adoptopenjdk
+              - google-chrome
+              - firefox
+              - visual-studio-code
+            state: present
+
+        - name: Install brew dependencies
+          homebrew:
+            name:
+              - git
+              - git-extras
+              - wget
+              - rbenv
+              - ruby-build
+              - cocoapods
+              - awscli
+              - cmake
+              - jq
+              - yq
+              - unzip
+              - gnu-tar
+              - ABridoux/formulae/scout
+              - hub
+              - gomplate
+            state: present
